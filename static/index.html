@@ -184,6 +184,7 @@
     }
 
     // Функция для получения книги по ID
+    // Function to fetch a book by its ID and display it in the table
     function fetchBookById() {
         const bookId = document.getElementById('bookId').value;
 
@@ -194,7 +195,16 @@
             .then(data => {
                 if (data.status === 'success') {
                     const book = data.data;
-                    showSuccess('Book retrieved: ' + book.title + ' by ' + book.author);
+
+                    // Clear the table and add only the fetched book
+                    const tableBody = document.querySelector('#bookTable tbody');
+                    tableBody.innerHTML = ''; // Clear the table
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td>${book.id}</td><td>${book.title}</td><td>${book.author}</td>`;
+                    tableBody.appendChild(row);
+
+                    showSuccess('Book retrieved successfully');
                 } else {
                     showError(data.message);
                 }
@@ -203,6 +213,7 @@
                 showError('Failed to retrieve book: ' + error);
             });
     }
+
 
     // Функция для отображения ошибок
     function showError(message) {
