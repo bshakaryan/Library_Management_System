@@ -25,7 +25,7 @@ The **Library Management System** is a web-based tool developed in Go to manage 
 ## Technologies Used
 - **Programming Language**: Go (Golang)
 - **Web Framework**: net/http
-- **Database**: PostgreSQL
+- **Database**: MongoDB
 - **ORM**: GORM
 - **Testing Tool**: Postman (for API testing)
 
@@ -36,5 +36,5 @@ The **Library Management System** is a web-based tool developed in Go to manage 
 ### Prerequisites:
 Ensure you have the following installed:
 - **Go** (>= 1.21)
-- **PostgreSQL**
+- **MongoDB**
 - **Git**
