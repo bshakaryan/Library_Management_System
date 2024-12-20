@@ -4,25 +4,22 @@ import (
 	"awesomeProject/database"
 	"context"
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/mongo"
-	"net/http"
-	"time"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"net/http"
+	"time"
 )
 
-// Book структура для представления книги
 type Book struct {
 	ID     primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Title  string             `json:"title" bson:"title"`
 	Author string             `json:"author" bson:"author"`
 }
 
-// BooksHandler обрабатывает все запросы, связанные с книгами
 func BooksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		// Получение всех книг или книги по ID
 		idParam := r.URL.Query().Get("id")
 		if idParam != "" {
 			getBookByID(w, r) // Если есть параметр id, вызываем функцию для получения книги по ID
@@ -62,37 +59,28 @@ func getBooks(w http.ResponseWriter) {
 }
 
 func getBookByID(w http.ResponseWriter, r *http.Request) {
-	// Извлечение ID из URL-параметров
 	idParam := r.URL.Query().Get("id")
 	if idParam == "" {
 		http.Error(w, "Missing ID parameter", http.StatusBadRequest)
 		return
 	}
 
-	// Преобразование строки в ObjectID
 	objectID, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
 		http.Error(w, "Invalid ID format", http.StatusBadRequest)
 		return
 	}
 
-	// Создание контекста для запроса
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Поиск книги в базе данных по ID
 	var book Book
 	err = database.BookCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&book)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			http.Error(w, "Book not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Failed to retrieve book", http.StatusInternalServerError)
-		}
+		http.Error(w, "Book not found", http.StatusNotFound)
 		return
 	}
 
-	// Отправка найденной книги в ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(book)
 }
@@ -116,7 +104,7 @@ func createBook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(book)
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
 func updateBook(w http.ResponseWriter, r *http.Request) {
@@ -126,14 +114,20 @@ func updateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	objectID, err := primitive.ObjectIDFromHex(book.ID.Hex())
+	if err != nil {
+		http.Error(w, "Invalid ID format", http.StatusBadRequest)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	filter := bson.M{"_id": book.ID}
+	filter := bson.M{"_id": objectID}
 	update := bson.M{"$set": bson.M{"title": book.Title, "author": book.Author}}
 
-	result, err := database.BookCollection.UpdateOne(ctx, filter, update)
-	if err != nil || result.MatchedCount == 0 {
+	_, err = database.BookCollection.UpdateOne(ctx, filter, update)
+	if err != nil {
 		http.Error(w, "Failed to update book", http.StatusInternalServerError)
 		return
 	}
@@ -149,12 +143,17 @@ func deleteBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	objectID, err := primitive.ObjectIDFromHex(book.ID.Hex())
+	if err != nil {
+		http.Error(w, "Invalid ID format", http.StatusBadRequest)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	filter := bson.M{"_id": book.ID}
-	result, err := database.BookCollection.DeleteOne(ctx, filter)
-	if err != nil || result.DeletedCount == 0 {
+	_, err = database.BookCollection.DeleteOne(ctx, bson.M{"_id": objectID})
+	if err != nil {
 		http.Error(w, "Failed to delete book", http.StatusInternalServerError)
 		return
 	}

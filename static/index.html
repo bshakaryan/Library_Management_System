@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Management</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        #error {
+            color: red;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Book Management</h1>
+
+    <!-- Кнопки для различных операций -->
+    <button onclick="fetchBooks()">Load All Books</button>
+    <button onclick="createBook()">Create Book</button>
+    <button onclick="updateBook()">Update Book</button>
+    <button onclick="deleteBook()">Delete Book</button>
+    <button onclick="fetchBookById()">Get Book by ID</button>
+
+    <div id="error"></div>
+
+    <!-- Таблица для отображения книг -->
+    <table id="bookTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Author</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Books will be loaded here -->
+        </tbody>
+    </table>
+
+    <!-- Формы для ввода данных для создания и обновления книги -->
+    <div>
+        <h3>Create New Book</h3>
+        <input type="text" id="newTitle" placeholder="Title">
+        <input type="text" id="newAuthor" placeholder="Author">
+    </div>
+
+    <div>
+        <h3>Update Book</h3>
+        <input type="text" id="updateId" placeholder="Book ID">
+        <input type="text" id="updateTitle" placeholder="New Title">
+        <input type="text" id="updateAuthor" placeholder="New Author">
+    </div>
+
+    <div>
+        <h3>Delete Book</h3>
+        <input type="text" id="deleteId" placeholder="Book ID">
+    </div>
+
+    <div>
+        <h3>Get Book by ID</h3>
+        <input type="text" id="getBookId" placeholder="Book ID">
+    </div>
+
+    <script>
+        // Fetch all books from the server
+        function fetchBooks() {
+            fetch('/books', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.querySelector('#bookTable tbody');
+                tableBody.innerHTML = ''; // Clear the table
+                data.forEach(book => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td>${book.id}</td><td>${book.title}</td><td>${book.author}</td>`;
+                    tableBody.appendChild(row);
+                });
+            })
+            .catch(error => {
+                showError('Failed to load books: ' + error);
+            });
+        }
+
+        // Fetch a book by ID
+        function fetchBookById() {
+            const bookId = document.getElementById('getBookId').value;
+
+            if (!bookId) {
+                showError('Please enter a Book ID');
+                return;
+            }
+
+            fetch(`/books?id=${bookId}`, {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.querySelector('#bookTable tbody');
+                tableBody.innerHTML = ''; // Clear the table
+
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${data.id}</td><td>${data.title}</td><td>${data.author}</td>`;
+                tableBody.appendChild(row);
+            })
+            .catch(error => {
+                showError('Failed to get book by ID: ' + error);
+            });
+        }
+
+        // Create a new book
+        function createBook() {
+            const newBook = {
+                title: document.getElementById('newTitle').value,
+                author: document.getElementById('newAuthor').value
+            };
+
+            fetch('/books', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newBook)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    fetchBooks(); // Refresh the list of books
+                } else {
+                    showError('Failed to create book');
+                }
+            })
+            .catch(error => {
+                showError('Failed to create book: ' + error);
+            });
+        }
+
+        // Update a book
+        function updateBook() {
+            const updatedBook = {
+                id: document.getElementById('updateId').value,
+                title: document.getElementById('updateTitle').value,
+                author: document.getElementById('updateAuthor').value
+            };
+
+            fetch('/books', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updatedBook)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    fetchBooks(); // Refresh the list of books
+                } else {
+                    showError('Failed to update book');
+                }
+            })
+            .catch(error => {
+                showError('Failed to update book: ' + error);
+            });
+        }
+
+        // Delete a book
+        function deleteBook() {
+            const bookId = document.getElementById('deleteId').value;
+
+            fetch('/books', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: bookId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    fetchBooks(); // Refresh the list of books
+                } else {
+                    showError('Failed to delete book');
+                }
+            })
+            .catch(error => {
+                showError('Failed to delete book: ' + error);
+            });
+        }
+
+        // Display error message
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
