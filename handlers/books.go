@@ -16,6 +16,26 @@ type Book struct {
 	Author string             `json:"author" bson:"author"`
 }
 
+// Helper function for JSON responses
+func jsonResponse(w http.ResponseWriter, status, message string, code int, data ...interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+
+	// Prepare the response map
+	response := map[string]interface{}{
+		"status":  status,
+		"message": message,
+	}
+
+	// If data is provided (non-empty), include it in the response
+	if len(data) > 0 {
+		response["data"] = data[0]
+	}
+
+	// Encode the response to JSON and send it
+	json.NewEncoder(w).Encode(response)
+}
+
 func BooksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -37,58 +57,10 @@ func BooksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getBooks(w http.ResponseWriter) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	cursor, err := database.BookCollection.Find(ctx, bson.M{})
-	if err != nil {
-		http.Error(w, "Failed to retrieve books", http.StatusInternalServerError)
-		return
-	}
-	defer cursor.Close(ctx)
-
-	var books []Book
-	if err = cursor.All(ctx, &books); err != nil {
-		http.Error(w, "Error decoding books", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(books)
-}
-
-func getBookByID(w http.ResponseWriter, r *http.Request) {
-	idParam := r.URL.Query().Get("id")
-	if idParam == "" {
-		http.Error(w, "Missing ID parameter", http.StatusBadRequest)
-		return
-	}
-
-	objectID, err := primitive.ObjectIDFromHex(idParam)
-	if err != nil {
-		http.Error(w, "Invalid ID format", http.StatusBadRequest)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	var book Book
-	err = database.BookCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&book)
-	if err != nil {
-		http.Error(w, "Book not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(book)
-}
-
 func createBook(w http.ResponseWriter, r *http.Request) {
 	var book Book
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		jsonResponse(w, "fail", "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
@@ -99,65 +71,151 @@ func createBook(w http.ResponseWriter, r *http.Request) {
 
 	_, err := database.BookCollection.InsertOne(ctx, book)
 	if err != nil {
-		http.Error(w, "Failed to create book", http.StatusInternalServerError)
+		jsonResponse(w, "fail", "Failed to create book", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	jsonResponse(w, "success", "Successfully created book", http.StatusOK)
 }
 
 func updateBook(w http.ResponseWriter, r *http.Request) {
-	var book Book
-	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+	// Get the book ID from the URL query parameter
+	idParam := r.URL.Query().Get("id")
+	if idParam == "" {
+		jsonResponse(w, "fail", "Missing ID parameter", http.StatusBadRequest)
 		return
 	}
 
-	objectID, err := primitive.ObjectIDFromHex(book.ID.Hex())
+	// Convert the ID from hex string to ObjectID
+	objectID, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
-		http.Error(w, "Invalid ID format", http.StatusBadRequest)
+		jsonResponse(w, "fail", "Invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	// Decode the book details from the request body
+	var book Book
+	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
+		jsonResponse(w, "fail", "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Set up the filter for the update query
 	filter := bson.M{"_id": objectID}
+
+	// Set the update parameters
 	update := bson.M{"$set": bson.M{"title": book.Title, "author": book.Author}}
 
-	_, err = database.BookCollection.UpdateOne(ctx, filter, update)
+	// Perform the update operation
+	result, err := database.BookCollection.UpdateOne(ctx, filter, update)
 	if err != nil {
-		http.Error(w, "Failed to update book", http.StatusInternalServerError)
+		jsonResponse(w, "fail", "Failed to update book", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	// Check if any document was updated
+	if result.MatchedCount == 0 {
+		jsonResponse(w, "fail", "Book not found", http.StatusNotFound)
+		return
+	}
+
+	// Return success response
+	jsonResponse(w, "success", "Successfully updated book", http.StatusOK)
 }
 
 func deleteBook(w http.ResponseWriter, r *http.Request) {
-	var book Book
-	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+	// Get the book ID from the URL query parameter
+	idParam := r.URL.Query().Get("id")
+	if idParam == "" {
+		jsonResponse(w, "fail", "Missing ID parameter", http.StatusBadRequest)
 		return
 	}
 
-	objectID, err := primitive.ObjectIDFromHex(book.ID.Hex())
+	// Convert the ID from hex string to ObjectID
+	objectID, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
-		http.Error(w, "Invalid ID format", http.StatusBadRequest)
+		jsonResponse(w, "fail", "Invalid ID format", http.StatusBadRequest)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err = database.BookCollection.DeleteOne(ctx, bson.M{"_id": objectID})
+	// Perform the delete operation
+	result, err := database.BookCollection.DeleteOne(ctx, bson.M{"_id": objectID})
 	if err != nil {
-		http.Error(w, "Failed to delete book", http.StatusInternalServerError)
+		jsonResponse(w, "fail", "Failed to delete book", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	// Check if any document was deleted
+	if result.DeletedCount == 0 {
+		jsonResponse(w, "fail", "Book not found", http.StatusNotFound)
+		return
+	}
+
+	// Return success response
+	jsonResponse(w, "success", "Successfully deleted book", http.StatusOK)
+}
+
+func getBooks(w http.ResponseWriter) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Query to get all books from the database
+	cursor, err := database.BookCollection.Find(ctx, bson.M{})
+	if err != nil {
+		jsonResponse(w, "fail", "Failed to retrieve books", http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var books []Book
+	if err = cursor.All(ctx, &books); err != nil {
+		jsonResponse(w, "fail", "Error decoding books", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if no books are found
+	if len(books) == 0 {
+		jsonResponse(w, "fail", "No books in library", http.StatusNotFound)
+		return
+	}
+
+	// If books are found, return the books data in JSON format
+	jsonResponse(w, "success", "Books retrieved successfully", http.StatusOK, books)
+}
+
+func getBookByID(w http.ResponseWriter, r *http.Request) {
+	idParam := r.URL.Query().Get("id")
+	if idParam == "" {
+		jsonResponse(w, "fail", "Missing ID parameter", http.StatusBadRequest)
+		return
+	}
+
+	objectID, err := primitive.ObjectIDFromHex(idParam)
+	if err != nil {
+		jsonResponse(w, "fail", "Invalid ID format", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var book Book
+	err = database.BookCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&book)
+	if err != nil {
+		if err.Error() == "mongo: no documents in result" {
+			jsonResponse(w, "fail", "Book not found", http.StatusNotFound)
+		} else {
+			jsonResponse(w, "fail", "Failed to retrieve book", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Return the book data in JSON format
+	jsonResponse(w, "success", "Book retrieved successfully", http.StatusOK, book)
 }
