@@ -59,22 +59,34 @@ func BooksHandler(w http.ResponseWriter, r *http.Request) {
 
 func createBook(w http.ResponseWriter, r *http.Request) {
 	var book Book
+
+	// Декодируем JSON
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
 		jsonResponse(w, "fail", "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
+	// Проверяем обязательные поля
+	if book.Title == "" || book.Author == "" {
+		jsonResponse(w, "fail", "Missing required fields: title or author", http.StatusBadRequest)
+		return
+	}
+
+	// Присваиваем уникальный ID
 	book.ID = primitive.NewObjectID()
 
+	// Контекст для базы данных
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Вставляем в коллекцию
 	_, err := database.BookCollection.InsertOne(ctx, book)
 	if err != nil {
 		jsonResponse(w, "fail", "Failed to create book", http.StatusInternalServerError)
 		return
 	}
 
+	// Успешный ответ
 	jsonResponse(w, "success", "Successfully created book", http.StatusOK)
 }
 
