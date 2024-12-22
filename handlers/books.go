@@ -39,12 +39,16 @@ func jsonResponse(w http.ResponseWriter, status, message string, code int, data 
 func BooksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		// Получение всех книг или книги по ID
-		idParam := r.URL.Query().Get("id")
-		if idParam != "" {
-			getBookByID(w, r) // Если есть параметр id, вызываем функцию для получения книги по ID
-		} else {
-			getBooks(w) // Если нет параметра id, выводим все книги
+		// Get all books or a specific book by ID
+		idParam, ok := r.URL.Query()["id"] // Check if "id" parameter is present
+		if ok && idParam[0] == "" {        // If "id" is present but empty
+			jsonResponse(w, "fail", "The 'id' parameter cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if ok { // If "id" parameter exists, call getBookByID
+			getBookByID(w, r)
+		} else { // Otherwise, retrieve all books
+			getBooks(w)
 		}
 	case http.MethodPost:
 		createBook(w, r)
