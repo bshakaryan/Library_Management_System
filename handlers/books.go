@@ -4,6 +4,7 @@ import (
 	"awesomeProject/database"
 	"context"
 	"encoding/json"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/http"
@@ -62,35 +63,36 @@ func BooksHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func createBook(w http.ResponseWriter, r *http.Request) {
-	var book Book
+	var payload map[string]interface{}
 
-	// Декодируем JSON
-	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
+	// Decode the JSON payload into a map
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		jsonResponse(w, "fail", "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
-	// Проверяем обязательные поля
-	if book.Title == "" || book.Author == "" {
-		jsonResponse(w, "fail", "Missing required fields: title or author", http.StatusBadRequest)
-		return
+	// Allowed fields
+	allowedFields := map[string]bool{
+		"title":  true,
+		"author": true,
 	}
 
-	// Присваиваем уникальный ID
-	book.ID = primitive.NewObjectID()
+	// Check for invalid fields and ensure all values are strings
+	for key, value := range payload {
+		if !allowedFields[key] {
+			jsonResponse(w, "fail", fmt.Sprintf("Invalid field: %s", key), http.StatusBadRequest)
+			return
+		}
 
-	// Контекст для базы данных
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Вставляем в коллекцию
-	_, err := database.BookCollection.InsertOne(ctx, book)
-	if err != nil {
-		jsonResponse(w, "fail", "Failed to create book", http.StatusInternalServerError)
-		return
+		// Check if the value is a string
+		if _, ok := value.(string); !ok {
+			jsonResponse(w, "fail", fmt.Sprintf("Field %s must be a string", key), http.StatusBadRequest)
+			return
+		}
 	}
 
-	// Успешный ответ
+	// Save the book to the database or perform further logic
+	// For demonstration, just returning a success response
 	jsonResponse(w, "success", "Successfully created book", http.StatusOK)
 }
 
